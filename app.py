@@ -37,6 +37,9 @@ def execute_insert(sql, params):
     with engine.begin() as conn:
         conn.execute(text(sql), params)
 
+def execute_update(sql, params):
+    with engine.begin() as conn:
+        conn.execute(text(sql), params)
 
 def metric_win_rate(df):
     if df.empty or "result" not in df.columns:
@@ -261,8 +264,160 @@ def records_page(matches_df, lessons_df, journal_df):
     tab1, tab2, tab3 = st.tabs(["경기", "레슨", "저널"])
 
     with tab1:
-        st.caption("최신 경기부터 표시됩니다.")
-        st.dataframe(matches_df, use_container_width=True, hide_index=True)
+        st.subheader("경기 기록 조회")
+        st.caption("최신 경기부터 표시됩니다. 삭제된 기록은 기본 목록에서 숨겨집니다.")
+
+        if matches_df.empty:
+            st.info("표시할 경기 기록이 없습니다.")
+        else:
+            st.dataframe(matches_df, use_container_width=True, hide_index=True)
+
+            st.divider()
+            st.subheader("경기 기록 수정 / 삭제")
+
+            option_df = matches_df[["id", "match_date", "partner_name", "score_summary", "result"]].copy()
+
+            selected_id = st.selectbox(
+                "수정할 경기 선택",
+                options=option_df["id"].tolist(),
+                format_func=lambda x: (
+                    f"ID {x} | "
+                    f"{option_df.loc[option_df['id'] == x, 'match_date'].iloc[0]} | "
+                    f"{option_df.loc[option_df['id'] == x, 'partner_name'].fillna('').iloc[0]} | "
+                    f"{option_df.loc[option_df['id'] == x, 'score_summary'].fillna('').iloc[0]} | "
+                    f"{option_df.loc[option_df['id'] == x, 'result'].fillna('').iloc[0]}"
+                ),
+            )
+
+            selected_match = matches_df[matches_df["id"] == selected_id].iloc[0]
+
+            with st.form(f"edit_match_form_{selected_id}"):
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    match_date = st.date_input(
+                        "경기일",
+                        value=pd.to_datetime(selected_match["match_date"]).date()
+                    )
+                    match_type = st.selectbox(
+                        "경기 유형",
+                        ["남복", "여복", "혼복", "기타"],
+                        index=["남복", "여복", "혼복", "기타"].index(selected_match["match_type"])
+                        if selected_match["match_type"] in ["남복", "여복", "혼복", "기타"] else 0
+                    )
+                    venue = st.text_input("장소", value=selected_match["venue"] or "")
+                    event_name = st.text_input("이벤트/모임명", value=selected_match["event_name"] or "")
+                    partner_name = st.text_input("파트너 이름", value=selected_match["partner_name"] or "")
+                    court_position1 = st.selectbox(
+                        "복식에서 내 위치",
+                        ["듀스", "애드"],
+                        index=["듀스", "애드"].index(selected_match["court_position1"])
+                        if selected_match["court_position1"] in ["듀스", "애드"] else 0
+                    )
+                    opponent_1 = st.text_input("상대 1", value=selected_match["opponent_1"] or "")
+                    opponent_2 = st.text_input("상대 2", value=selected_match["opponent_2"] or "")
+                    court_position2 = st.selectbox(
+                        "복식에서 상대1 위치",
+                        ["듀스", "애드"],
+                        index=["듀스", "애드"].index(selected_match["court_position2"])
+                        if selected_match["court_position2"] in ["듀스", "애드"] else 0
+                    )
+                    score_summary = st.text_input("스코어", value=selected_match["score_summary"] or "")
+                    result = st.selectbox(
+                        "결과",
+                        ["승", "패", "무"],
+                        index=["승", "패", "무"].index(selected_match["result"])
+                        if selected_match["result"] in ["승", "패", "무"] else 0
+                    )
+
+                with col2:
+                    serve_rating = st.slider("서브", 1, 10, int(selected_match["serve_rating"] or 5))
+                    return_rating = st.slider("리턴", 1, 10, int(selected_match["return_rating"] or 5))
+                    volley_rating = st.slider("발리", 1, 10, int(selected_match["volley_rating"] or 5))
+                    positioning_rating = st.slider("포지셔닝", 1, 10, int(selected_match["positioning_rating"] or 5))
+                    communication_rating = st.slider("파트너 커뮤니케이션", 1, 10, int(selected_match["communication_rating"] or 5))
+                    fitness_rating = st.slider("체력", 1, 10, int(selected_match["fitness_rating"] or 5))
+                    confidence_rating = st.slider("자신감", 1, 10, int(selected_match["confidence_rating"] or 5))
+
+                strongest_point = st.text_area("잘한 점", value=selected_match["strongest_point"] or "")
+                biggest_issue = st.text_area("가장 아쉬웠던 점", value=selected_match["biggest_issue"] or "")
+                next_focus = st.text_area("다음 경기 집중 포인트", value=selected_match["next_focus"] or "")
+                notes = st.text_area("추가 메모", value=selected_match["notes"] or "")
+
+                col_save, col_delete = st.columns(2)
+                save_submitted = col_save.form_submit_button("수정 저장")
+                delete_submitted = col_delete.form_submit_button("이 기록 삭제")
+
+                if save_submitted:
+                    execute_update(
+                        """
+                        UPDATE matches
+                        SET
+                            match_date = :match_date,
+                            match_type = :match_type,
+                            venue = :venue,
+                            event_name = :event_name,
+                            partner_name = :partner_name,
+                            court_position1 = :court_position1,
+                            opponent_1 = :opponent_1,
+                            opponent_2 = :opponent_2,
+                            court_position2 = :court_position2,
+                            score_summary = :score_summary,
+                            result = :result,
+                            serve_rating = :serve_rating,
+                            return_rating = :return_rating,
+                            volley_rating = :volley_rating,
+                            positioning_rating = :positioning_rating,
+                            communication_rating = :communication_rating,
+                            fitness_rating = :fitness_rating,
+                            confidence_rating = :confidence_rating,
+                            strongest_point = :strongest_point,
+                            biggest_issue = :biggest_issue,
+                            next_focus = :next_focus,
+                            notes = :notes,
+                            updated_at = NOW()
+                        WHERE id = :id
+                        """,
+                        {
+                            "id": int(selected_id),
+                            "match_date": match_date,
+                            "match_type": match_type,
+                            "venue": venue,
+                            "event_name": event_name,
+                            "partner_name": partner_name,
+                            "court_position1": court_position1,
+                            "opponent_1": opponent_1,
+                            "opponent_2": opponent_2,
+                            "court_position2": court_position2,
+                            "score_summary": score_summary,
+                            "result": result,
+                            "serve_rating": serve_rating,
+                            "return_rating": return_rating,
+                            "volley_rating": volley_rating,
+                            "positioning_rating": positioning_rating,
+                            "communication_rating": communication_rating,
+                            "fitness_rating": fitness_rating,
+                            "confidence_rating": confidence_rating,
+                            "strongest_point": strongest_point,
+                            "biggest_issue": biggest_issue,
+                            "next_focus": next_focus,
+                            "notes": notes,
+                        },
+                    )
+                    st.success("경기 기록이 수정되었습니다.")
+                    st.rerun()
+
+                if delete_submitted:
+                    execute_update(
+                        """
+                        UPDATE matches
+                        SET deleted_at = NOW(), updated_at = NOW()
+                        WHERE id = :id
+                        """,
+                        {"id": int(selected_id)},
+                    )
+                    st.warning("경기 기록이 삭제 처리되었습니다. (soft delete)")
+                    st.rerun()
 
     with tab2:
         st.caption("최신 레슨부터 표시됩니다.")
@@ -306,7 +461,7 @@ def ai_ready_page(matches_df, lessons_df, journal_df):
 def main():
     page = render_sidebar()
 
-    matches_df = run_query("SELECT * FROM matches ORDER BY match_date DESC, id DESC")
+    matches_df = run_query("SELECT * FROM matches WHERE deleted_at IS NULL ORDER BY match_date DESC, id DESC")
     lessons_df = run_query("SELECT * FROM lessons ORDER BY lesson_date DESC, id DESC")
     journal_df = run_query("SELECT * FROM journal ORDER BY journal_date DESC, id DESC")
 
