@@ -10,8 +10,15 @@ DATABASE_URL = st.secrets["DATABASE_URL"]
 
 @st.cache_resource
 def get_engine():
-    return create_engine(DATABASE_URL)
-
+    db_url = URL.create(
+        drivername="postgresql+psycopg2",
+        username=st.secrets["DB_USER"],
+        password=st.secrets["DB_PASSWORD"],
+        host=st.secrets["DB_HOST"],
+        port=int(st.secrets["DB_PORT"]),
+        database=st.secrets["DB_NAME"],
+    )
+    return create_engine(db_url, pool_pre_ping=True)
 
 engine = get_engine()
 
