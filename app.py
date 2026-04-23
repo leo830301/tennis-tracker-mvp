@@ -23,7 +23,8 @@ def get_engine():
         poolclass=NullPool,
         pool_pre_ping=True,
     )
-
+    
+engine = get_engine()
 
 def run_query(query, params=None):
     with engine.connect() as conn:
