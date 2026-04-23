@@ -420,12 +420,201 @@ def records_page(matches_df, lessons_df, journal_df):
                     st.rerun()
 
     with tab2:
-        st.caption("최신 레슨부터 표시됩니다.")
-        st.dataframe(lessons_df, use_container_width=True, hide_index=True)
+        st.subheader("레슨 기록 조회")
+        st.caption("최신 레슨부터 표시됩니다. 삭제된 기록은 기본 목록에서 숨겨집니다.")
+
+        if lessons_df.empty:
+            st.info("표시할 레슨 기록이 없습니다.")
+        else:
+            st.dataframe(lessons_df, use_container_width=True, hide_index=True)
+
+            st.divider()
+            st.subheader("레슨 기록 수정 / 삭제")
+
+            lesson_option_df = lessons_df[["id", "lesson_date", "coach_name", "topic"]].copy()
+
+            selected_lesson_id = st.selectbox(
+                "수정할 레슨 선택",
+                options=lesson_option_df["id"].tolist(),
+                format_func=lambda x: (
+                    f"ID {x} | "
+                    f"{lesson_option_df.loc[lesson_option_df['id'] == x, 'lesson_date'].iloc[0]} | "
+                    f"{lesson_option_df.loc[lesson_option_df['id'] == x, 'coach_name'].fillna('').iloc[0]} | "
+                    f"{lesson_option_df.loc[lesson_option_df['id'] == x, 'topic'].fillna('').iloc[0]}"
+                ),
+            )
+
+            selected_lesson = lessons_df[lessons_df["id"] == selected_lesson_id].iloc[0]
+
+            with st.form(f"edit_lesson_form_{selected_lesson_id}"):
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    lesson_date = st.date_input(
+                        "레슨일",
+                        value=pd.to_datetime(selected_lesson["lesson_date"]).date()
+                    )
+                    coach_name = st.text_input("코치 이름", value=selected_lesson["coach_name"] or "")
+                    topic = st.text_input("레슨 주제", value=selected_lesson["topic"] or "")
+                    session_rating = st.slider("레슨 만족도", 1, 10, int(selected_lesson["session_rating"] or 5))
+                    physical_condition = st.selectbox(
+                        "컨디션",
+                        ["좋음", "보통", "나쁨"],
+                        index=["좋음", "보통", "나쁨"].index(selected_lesson["physical_condition"])
+                        if selected_lesson["physical_condition"] in ["좋음", "보통", "나쁨"] else 1
+                    )
+
+                with col2:
+                    drill_summary = st.text_area("드릴 요약", value=selected_lesson["drill_summary"] or "")
+                    correction_points = st.text_area("교정 포인트", value=selected_lesson["correction_points"] or "")
+                    homework = st.text_area("숙제", value=selected_lesson["homework"] or "")
+                    next_check_item = st.text_area("다음 점검 항목", value=selected_lesson["next_check_item"] or "")
+
+                notes = st.text_area("추가 메모", value=selected_lesson["notes"] or "")
+
+                col_save, col_delete = st.columns(2)
+                save_lesson = col_save.form_submit_button("레슨 수정 저장")
+                delete_lesson = col_delete.form_submit_button("이 레슨 삭제")
+
+                if save_lesson:
+                    execute_update(
+                        """
+                        UPDATE lessons
+                        SET
+                            lesson_date = :lesson_date,
+                            coach_name = :coach_name,
+                            topic = :topic,
+                            drill_summary = :drill_summary,
+                            correction_points = :correction_points,
+                            homework = :homework,
+                            next_check_item = :next_check_item,
+                            session_rating = :session_rating,
+                            physical_condition = :physical_condition,
+                            notes = :notes,
+                            updated_at = NOW()
+                        WHERE id = :id
+                        """,
+                        {
+                            "id": int(selected_lesson_id),
+                            "lesson_date": lesson_date,
+                            "coach_name": coach_name,
+                            "topic": topic,
+                            "drill_summary": drill_summary,
+                            "correction_points": correction_points,
+                            "homework": homework,
+                            "next_check_item": next_check_item,
+                            "session_rating": session_rating,
+                            "physical_condition": physical_condition,
+                            "notes": notes,
+                        },
+                    )
+                    st.success("레슨 기록이 수정되었습니다.")
+                    st.rerun()
+
+                if delete_lesson:
+                    execute_update(
+                        """
+                        UPDATE lessons
+                        SET deleted_at = NOW(), updated_at = NOW()
+                        WHERE id = :id
+                        """,
+                        {"id": int(selected_lesson_id)},
+                    )
+                    st.warning("레슨 기록이 삭제 처리되었습니다. (soft delete)")
+                    st.rerun()
 
     with tab3:
-        st.caption("최신 메모부터 표시됩니다.")
-        st.dataframe(journal_df, use_container_width=True, hide_index=True)
+        st.subheader("저널 조회")
+        st.caption("최신 메모부터 표시됩니다. 삭제된 기록은 기본 목록에서 숨겨집니다.")
+
+        if journal_df.empty:
+            st.info("표시할 저널 기록이 없습니다.")
+        else:
+            st.dataframe(journal_df, use_container_width=True, hide_index=True)
+
+            st.divider()
+            st.subheader("저널 수정 / 삭제")
+
+            journal_option_df = journal_df[["id", "journal_date", "entry_type", "mood"]].copy()
+
+            selected_journal_id = st.selectbox(
+                "수정할 저널 선택",
+                options=journal_option_df["id"].tolist(),
+                format_func=lambda x: (
+                    f"ID {x} | "
+                    f"{journal_option_df.loc[journal_option_df['id'] == x, 'journal_date'].iloc[0]} | "
+                    f"{journal_option_df.loc[journal_option_df['id'] == x, 'entry_type'].fillna('').iloc[0]} | "
+                    f"{journal_option_df.loc[journal_option_df['id'] == x, 'mood'].fillna('').iloc[0]}"
+                ),
+            )
+
+            selected_journal = journal_df[journal_df["id"] == selected_journal_id].iloc[0]
+
+            with st.form(f"edit_journal_form_{selected_journal_id}"):
+                journal_date = st.date_input(
+                    "날짜",
+                    value=pd.to_datetime(selected_journal["journal_date"]).date()
+                )
+                entry_type = st.selectbox(
+                    "유형",
+                    ["훈련 메모", "경기 전", "경기 후", "부상/통증", "기타"],
+                    index=["훈련 메모", "경기 전", "경기 후", "부상/통증", "기타"].index(selected_journal["entry_type"])
+                    if selected_journal["entry_type"] in ["훈련 메모", "경기 전", "경기 후", "부상/통증", "기타"] else 0
+                )
+                mood = st.selectbox(
+                    "기분",
+                    ["좋음", "보통", "아쉬움", "집중 안 됨", "의욕적"],
+                    index=["좋음", "보통", "아쉬움", "집중 안 됨", "의욕적"].index(selected_journal["mood"])
+                    if selected_journal["mood"] in ["좋음", "보통", "아쉬움", "집중 안 됨", "의욕적"] else 1
+                )
+                body_condition = st.selectbox(
+                    "몸 상태",
+                    ["가벼움", "보통", "피곤함", "통증 있음"],
+                    index=["가벼움", "보통", "피곤함", "통증 있음"].index(selected_journal["body_condition"])
+                    if selected_journal["body_condition"] in ["가벼움", "보통", "피곤함", "통증 있음"] else 1
+                )
+                memo = st.text_area("메모", value=selected_journal["memo"] or "")
+
+                col_save, col_delete = st.columns(2)
+                save_journal = col_save.form_submit_button("저널 수정 저장")
+                delete_journal = col_delete.form_submit_button("이 저널 삭제")
+
+                if save_journal:
+                    execute_update(
+                        """
+                        UPDATE journal
+                        SET
+                            journal_date = :journal_date,
+                            entry_type = :entry_type,
+                            mood = :mood,
+                            body_condition = :body_condition,
+                            memo = :memo,
+                            updated_at = NOW()
+                        WHERE id = :id
+                        """,
+                        {
+                            "id": int(selected_journal_id),
+                            "journal_date": journal_date,
+                            "entry_type": entry_type,
+                            "mood": mood,
+                            "body_condition": body_condition,
+                            "memo": memo,
+                        },
+                    )
+                    st.success("저널이 수정되었습니다.")
+                    st.rerun()
+
+                if delete_journal:
+                    execute_update(
+                        """
+                        UPDATE journal
+                        SET deleted_at = NOW(), updated_at = NOW()
+                        WHERE id = :id
+                        """,
+                        {"id": int(selected_journal_id)},
+                    )
+                    st.warning("저널이 삭제 처리되었습니다. (soft delete)")
+                    st.rerun()
 
 
 def ai_ready_page(matches_df, lessons_df, journal_df):
@@ -462,8 +651,8 @@ def main():
     page = render_sidebar()
 
     matches_df = run_query("SELECT * FROM matches WHERE deleted_at IS NULL ORDER BY match_date DESC, id DESC")
-    lessons_df = run_query("SELECT * FROM lessons ORDER BY lesson_date DESC, id DESC")
-    journal_df = run_query("SELECT * FROM journal ORDER BY journal_date DESC, id DESC")
+    lessons_df = run_query("SELECT * FROM lessons WHERE deleted_at IS NULL ORDER BY lesson_date DESC, id DESC")
+    journal_df = run_query("SELECT * FROM journal WHERE deleted_at IS NULL ORDER BY journal_date DESC, id DESC")
 
     if page == "홈":
         home_page(matches_df, lessons_df, journal_df)
