@@ -18,9 +18,11 @@ def get_engine():
         port=int(st.secrets["DB_PORT"]),
         database=st.secrets["DB_NAME"],
     )
-    return create_engine(db_url, pool_pre_ping=True)
-
-engine = get_engine()
+    return create_engine(
+        db_url,
+        poolclass=NullPool,
+        pool_pre_ping=True,
+    )
 
 
 def run_query(query, params=None):
