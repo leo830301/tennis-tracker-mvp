@@ -6,8 +6,6 @@ from sqlalchemy.engine import URL
 
 st.set_page_config(page_title="Tennis Tracker MVP", page_icon="🎾", layout="wide")
 
-DATABASE_URL = st.secrets["DATABASE_URL"]
-
 
 @st.cache_resource
 def get_engine():
