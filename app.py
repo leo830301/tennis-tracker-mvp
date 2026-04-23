@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import date
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL
+from sqlalchemy.pool import NullPool
 
 st.set_page_config(page_title="Tennis Tracker MVP", page_icon="🎾", layout="wide")
 
